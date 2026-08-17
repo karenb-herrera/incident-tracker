@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Incident Tracker tool</title>
+</head>
+
+<body>
+
+    <h1>Incident Tracker tool</h1>
+
+    <!-- Create Incident -->
+    <h2>Create Incident</h2>
+
+    <form id="incidentForm">
+
+        <input
+            id="title"
+            placeholder="Title"
+            required
+        >
+
+        <input
+            id="description"
+            placeholder="Description"
+        >
+
+        <input
+            id="reportedBy"
+            placeholder="Reported by"
+            required
+        >
+
+        <select id="severity">
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+        </select>
+
+        <button type="submit">Create</button>
+
+    </form>
+
+    <hr>
+
+    <!-- Get and Filter Incidents -->
+    <h2>Incidents</h2>
+
+    <select id="statusFilter">
+        <option value="">Statuses</option>
+        <option value="OPEN">Open</option>
+        <option value="IN_PROGRESS">In Progress</option>
+        <option value="RESOLVED">Resolved</option>
+    </select>
+
+    <select id="severityFilter">
+        <option value="">Severities</option>
+        <option value="LOW">Low</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="HIGH">High</option>
+    </select>
+
+    <button onclick="getIncidents()">Filter</button>
+    <button onclick="showAllIncidents()">Show All</button>
+
+    <div id="incidents"></div>
+
+    <hr>
+
+    <!-- Get Incident By ID -->
+    <h2>Get Incident By ID</h2>
+
+    <input
+        id="incidentId"
+        type="number"
+        min="1"
+        placeholder="Incident ID"
+    >
+
+    <button onclick="getIncidentById()">Get</button>
+
+    <div id="singleIncident"></div>
+
+
+    <script>
+
+        // POST /incidents
+        document.getElementById("incidentForm").addEventListener("submit", createIncident);
+
+        async function createIncident(event) {
+
+            event.preventDefault();
+
+            const incident = {
+                title: document.getElementById("title").value,
+                description: document.getElementById("description").value,
+                reported_by: document.getElementById("reportedBy").value,
+                severity: document.getElementById("severity").value
+            };
+
+            const response = await fetch("/incidents", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(incident)
+            });
+
+            if (response.ok) {
+                document.getElementById("incidentForm").reset();
+                getIncidents();
+            } else {
+                alert("Error: " + response.status);
+            }
+        }
+
+
+        // GET /incidents
+        // GET /incidents?status=...&severity=...
+        async function getIncidents() {
+
+            const status = document.getElementById("statusFilter").value;
+            const severity = document.getElementById("severityFilter").value;
+
+            const params = new URLSearchParams();
+
+            if (status) {
+                params.append("status", status);
+            }
+
+            if (severity) {
+                params.append("severity", severity);
+            }
+
+            const response = await fetch("/incidents?" + params);
+
+            if (!response.ok) {
+                alert("Error: " + response.status);
+                return;
+            }
+
+            const incidents = await response.json();
+
+            displayIncidents(incidents);
+        }
+
+
+        // GET /incidents without filters
+        function showAllIncidents() {
+
+            document.getElementById("statusFilter").value = "";
+            document.getElementById("severityFilter").value = "";
+
+            getIncidents();
+        }
+
+
+        // Display all incidents returned by GET
+        function displayIncidents(incidents) {
+
+            const container = document.getElementById("incidents");
+
+            container.innerHTML = "";
+
+            incidents.forEach(incident => {
+
+                const div = document.createElement("div");
+
+                div.innerHTML = `
+                    <p>
+                        <strong>ID:</strong> ${incident.id}<br>
+                        <strong>Title:</strong> ${incident.title}<br>
+                        <strong>Description:</strong> ${incident.description}<br>
+                        <strong>Reported By:</strong> ${incident.reportedBy}<br>
+                        <strong>Severity:</strong> ${incident.severity}<br>
+                        <strong>Timestamp:</strong> ${incident.timestamp}<br>
+                        <strong>Status:</strong> ${incident.status}
+                    </p>
+
+                    <select id="status-${incident.id}">
+                        <option value="OPEN" ${incident.status === "OPEN" ? "selected" : ""}>Open</option>
+                        <option value="IN_PROGRESS" ${incident.status === "IN_PROGRESS" ? "selected" : ""}>In Progress</option>
+                        <option value="RESOLVED" ${incident.status === "RESOLVED" ? "selected" : ""}>Resolved</option>
+                    </select>
+
+                    <button onclick="updateIncident(${incident.id})">
+                        Update Status
+                    </button>
+
+                    <button onclick="deleteIncident(${incident.id})">
+                        Delete
+                    </button>
+
+                    <hr>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+
+        // GET /incidents/{id}
+        async function getIncidentById() {
+
+            const id = document.getElementById("incidentId").value;
+
+            if (!id) {
+                alert("Please enter an incident ID");
+                return;
+            }
+
+            const response = await fetch("/incidents/" + id);
+
+            const container = document.getElementById("singleIncident");
+
+            if (!response.ok) {
+                container.innerHTML = "Error: " + response.status;
+                return;
+            }
+
+            const incident = await response.json();
+
+            container.innerHTML = `
+                <p>
+                    <strong>ID:</strong> ${incident.id}<br>
+                    <strong>Title:</strong> ${incident.title}<br>
+                    <strong>Description:</strong> ${incident.description}<br>
+                    <strong>Reported By:</strong> ${incident.reportedBy}<br>
+                    <strong>Severity:</strong> ${incident.severity}<br>
+                    <strong>Timestamp:</strong> ${incident.timestamp}<br>
+                    <strong>Status:</strong> ${incident.status}
+                </p>
+            `;
+        }
+
+
+        // PATCH /incidents/{id}
+        async function updateIncident(id) {
+
+            const status = document.getElementById("status-" + id).value;
+
+            const response = await fetch("/incidents/" + id, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    status: status
+                })
+            });
+
+            if (response.ok) {
+                getIncidents();
+            } else {
+                alert("Error: " + response.status);
+            }
+        }
+
+
+        // DELETE /incidents/{id}
+        async function deleteIncident(id) {
+
+            const response = await fetch("/incidents/" + id, {
+                method: "DELETE"
+            });
+
+            if (response.ok) {
+                getIncidents();
+            } else {
+                alert("Error: " + response.status);
+            }
+        }
+
+
+        // Load all incidents when the page opens
+        getIncidents();
+
+    </script>
+
+</body>
+</html>
